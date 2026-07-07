@@ -17,7 +17,7 @@
  */
 'use strict';
 
-const CACHE = 'decks-fs-v2';
+const CACHE = 'decks-fs-v3';
 let TOKEN = null;
 let CFG = null;               // { owner, repo, branch }
 
@@ -96,6 +96,10 @@ async function handle(req) {
   const raw = u.searchParams.has('raw');
   const present = u.searchParams.has('present');
   const isDeck = /\.dc\.html$/i.test(rel);
+  // Never cache deck HTML (edits must stay fresh; editor/present injection differ)
+  // or the editor script (app code that changes). Vendor libs + deck assets
+  // (fonts/images) ARE cached — immutable and heavy.
+  const fresh = isDeck || rel === '_editor/dc-editor.js';
   const htmlHeaders = { 'content-type': 'text/html', 'cache-control': 'no-cache' };
 
   if (!TOKEN || !CFG) return new Response('No token — open the gallery and sign in.', { status: 401 });
@@ -103,9 +107,7 @@ async function handle(req) {
   const cache = await caches.open(CACHE);
   const cacheKey = new Request(MOUNT + rel);            // key ignores query
 
-  // Assets: cache-first. Deck HTML: never cached — edits must stay fresh, and the
-  // editor vs. present injection differ per request.
-  if (!isDeck) {
+  if (!fresh) {
     const hit = await cache.match(cacheKey);
     if (hit) return hit;
   }
@@ -119,7 +121,7 @@ async function handle(req) {
     return new Response(out, { headers: htmlHeaders });
   }
   const base = new Response(bytes, { headers: { 'content-type': mimeOf(rel), 'cache-control': 'no-cache' } });
-  cache.put(cacheKey, base.clone());
+  if (!fresh) cache.put(cacheKey, base.clone());
   return base;
 }
 
