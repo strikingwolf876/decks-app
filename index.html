@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decks</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 10%,rgba(0,240,255,.08),transparent 45%),linear-gradient(180deg,#121a24,#0e141c);
+    color:#f4fbff;font:16px/1.5 'JetBrains Mono',ui-monospace,monospace}
+  #gallery{padding:8vh 6vw}
+  h1{font:700 42px/1.05 system-ui,sans-serif;margin:0 0 4px}
+  .sub{color:rgba(192,252,255,.6);margin:0 0 28px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 32px}
+  .btn{background:rgba(22,28,38,.94);color:#e8f6ff;border:1px solid rgba(0,240,255,.35);
+    padding:9px 14px;border-radius:9px;cursor:pointer;font:600 13px/1 system-ui;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:#00f0ff}
+  .btn.warn{border-color:rgba(255,120,120,.5);color:#ffb3b3}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+  .card{display:flex;flex-direction:column;gap:8px;padding:22px 24px;border:1px solid rgba(0,240,255,.28);
+    border-radius:16px;background:rgba(20,29,39,.6);text-decoration:none;color:inherit;transition:.15s;cursor:pointer;text-align:left;font:inherit}
+  .card:hover{border-color:#00f0ff;background:rgba(0,240,255,.06);transform:translateY(-2px)}
+  .t{font:700 22px/1.15 system-ui,sans-serif;color:#f4fbff}
+  .t::after{content:" →";color:#b8ff00}
+  .m{font-size:13px;color:rgba(192,252,255,.55);word-break:break-all}
+  .empty,.status{color:rgba(192,252,255,.6)}
+  .status.err{color:#ffb3b3}
+
+  /* no-token hero */
+  #signin{display:none;flex-direction:column;align-items:flex-start;gap:16px;max-width:520px;margin-top:4vh}
+  #signin.show{display:flex}
+  #signin p{margin:0;color:rgba(192,252,255,.7)}
+  .big{font:700 15px/1 system-ui,sans-serif;padding:14px 22px;border-radius:11px}
+  .hint{font-size:12px;color:rgba(192,252,255,.5);line-height:1.6}
+  .hint a{color:#00f0ff}
+
+  /* deck viewer */
+  #viewer{position:fixed;inset:0;display:none;flex-direction:column;background:#0e141c;z-index:20}
+  #viewer.show{display:flex}
+  #viewer .vbar{flex:0 0 auto;display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(0,240,255,.2)}
+  #viewer .vtitle{color:rgba(192,252,255,.7);font-size:13px}
+  #frame{flex:1 1 auto;width:100%;border:0;background:#0f151d}
+</style>
+</head>
+<body>
+  <section id="gallery">
+    <h1>Decks</h1>
+    <p class="sub" id="sub">git-backed · edit anywhere</p>
+
+    <div class="bar" id="bar" style="display:none">
+      <button class="btn" id="btn-refresh">↻ Refresh</button>
+      <button class="btn warn" id="btn-signout">Sign out</button>
+    </div>
+
+    <div id="signin">
+      <p>Paste a GitHub token to load your decks.</p>
+      <button class="btn big" id="btn-paste">🔑 Paste GitHub token</button>
+      <p class="hint">Fine-grained PAT, this repo only, <b>Contents: Read and write</b>.
+        Stays in this browser, never committed.
+        <a href="https://github.com/settings/tokens?type=beta" target="_blank" rel="noopener">Create token ↗</a></p>
+    </div>
+
+    <p class="status" id="status"></p>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <div id="viewer">
+    <div class="vbar">
+      <button class="btn" id="btn-back">← Decks</button>
+      <span class="vtitle" id="vtitle"></span>
+    </div>
+    <iframe id="frame" title="deck"></iframe>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
