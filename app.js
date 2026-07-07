@@ -121,19 +121,15 @@ async function commitDeck(path, text) {
   const api = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
   // Look up the current blob SHA (needed to update an existing file). Parse
   // defensively: a non-JSON body here means the request didn't reach the API.
+  // no-store: the SW renders the deck via the SAME contents URL with
+  // Accept: raw. Without this, the browser HTTP cache serves us that raw HTML
+  // (Accept-blind) instead of the JSON metadata we asked for.
   let sha;
-  const gUrl = api + '?ref=' + encodeURIComponent(cfg.branch);
-  const g = await fetch(gUrl, { headers: ghHeaders() });
-  const gBody = await g.text();
-  console.log('[commitDeck] GET', gUrl, '→', g.status, g.type, g.headers.get('content-type'), 'body[0:120]=', gBody.slice(0, 120));
+  const g = await fetch(api + '?ref=' + encodeURIComponent(cfg.branch), { headers: ghHeaders(), cache: 'no-store' });
   if (g.ok) {
-    let meta; try { meta = JSON.parse(gBody); } catch {
-      console.error('[commitDeck] non-JSON sha response — full body:', gBody);
-      throw new Error(`sha read got non-JSON (${g.status} ${g.type} ${g.headers.get('content-type')})`);
-    }
-    sha = meta.sha;
+    sha = (await g.json()).sha;
   } else if (g.status !== 404) {
-    throw new Error('sha read ' + g.status + ': ' + gBody.slice(0, 160));   // 404 = new file, fine
+    throw new Error('sha read ' + g.status + ': ' + (await g.text()).slice(0, 160));   // 404 = new file, fine
   }
   const body = { message: 'edit ' + path, content: b64utf8(text), branch: cfg.branch, ...(sha ? { sha } : {}) };
   const p = await fetch(api, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });

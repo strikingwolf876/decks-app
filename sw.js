@@ -132,7 +132,10 @@ async function fetchRepoFile(rel) {
     rel.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(CFG.branch)}`;
   let r;
   try {
-    r = await fetch(api, { headers: { Authorization: 'token ' + TOKEN, Accept: 'application/vnd.github.raw' } });
+    // no-store: keep these raw responses out of the browser HTTP cache — the
+    // page's commit sha-lookup hits the same URL with Accept: json and must not
+    // be served our cached raw body. (Asset reuse is handled by the SW Cache API.)
+    r = await fetch(api, { headers: { Authorization: 'token ' + TOKEN, Accept: 'application/vnd.github.raw' }, cache: 'no-store' });
   } catch (err) {
     return new Response('Network error reaching GitHub: ' + err.message, { status: 502 });
   }
