@@ -107,7 +107,11 @@ function render(paths) {
 function openDeck(path) {
   currentDeckPath = path;
   const segs = path.split('/').map(encodeURIComponent).join('/');
-  $('frame').src = BASE + 'fs/' + segs;
+  const frame = $('frame');
+  // Focus the iframe so the deck's window-level key nav works immediately —
+  // without this the arrows are dead until you first click inside the deck.
+  frame.onload = () => { try { frame.contentWindow.focus(); } catch (e) {} };
+  frame.src = BASE + 'fs/' + segs;
   $('viewer').classList.add('show');
 }
 function closeDeck() {
