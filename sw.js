@@ -17,7 +17,7 @@
  */
 'use strict';
 
-const CACHE = 'decks-fs-v3';
+const CACHE = 'decks-fs-v4';
 let TOKEN = null;
 let CFG = null;               // { owner, repo, branch }
 
@@ -125,20 +125,36 @@ async function handle(req) {
   return base;
 }
 
-// Read a file from the private repo. Uses the raw media type (streams up to
-// 100MB, handles binary). Returns an ArrayBuffer, or a Response on error.
+const ghHeaders = () => ({ Authorization: 'token ' + TOKEN, Accept: 'application/vnd.github+json' });
+function b64ToBytes(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out.buffer;
+}
+
+// Read a file from the private repo as base64 JSON — works for binary (fonts,
+// images) with no auth-dropping redirect, unlike the raw media type. Files >1MB
+// come back with empty content, so fall back to the blobs API via the sha (up to
+// 100MB). no-store: keep responses out of the browser HTTP cache so the page's
+// commit sha-lookup (same contents URL) isn't served a stale body.
+// Returns an ArrayBuffer, or a Response on error.
 async function fetchRepoFile(rel) {
-  const api = `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${
+  const contents = `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${
     rel.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(CFG.branch)}`;
-  let r;
-  try {
-    // no-store: keep these raw responses out of the browser HTTP cache — the
-    // page's commit sha-lookup hits the same URL with Accept: json and must not
-    // be served our cached raw body. (Asset reuse is handled by the SW Cache API.)
-    r = await fetch(api, { headers: { Authorization: 'token ' + TOKEN, Accept: 'application/vnd.github.raw' }, cache: 'no-store' });
-  } catch (err) {
-    return new Response('Network error reaching GitHub: ' + err.message, { status: 502 });
-  }
+  let r, j;
+  try { r = await fetch(contents, { headers: ghHeaders(), cache: 'no-store' }); }
+  catch (err) { return new Response('Network error reaching GitHub: ' + err.message, { status: 502 }); }
   if (!r.ok) return new Response(`GitHub ${r.status} for ${rel}`, { status: r.status });
-  return r.arrayBuffer();
+  j = await r.json();
+  if (j.encoding === 'base64' && j.content) return b64ToBytes(j.content);
+
+  if (j.sha) {   // >1MB: blobs API returns base64 up to 100MB
+    const b = await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}/git/blobs/${j.sha}`,
+      { headers: ghHeaders(), cache: 'no-store' });
+    if (!b.ok) return new Response(`GitHub blob ${b.status} for ${rel}`, { status: b.status });
+    const bj = await b.json();
+    if (bj.encoding === 'base64' && bj.content) return b64ToBytes(bj.content);
+  }
+  return new Response(`Unreadable file ${rel}`, { status: 500 });
 }
