@@ -35,12 +35,10 @@
   .hint{font-size:12px;color:rgba(192,252,255,.5);line-height:1.6}
   .hint a{color:#00f0ff}
 
-  /* deck viewer */
-  #viewer{position:fixed;inset:0;display:none;flex-direction:column;background:#0e141c;z-index:20}
-  #viewer.show{display:flex}
-  #viewer .vbar{flex:0 0 auto;display:flex;gap:10px;align-items:center;padding:8px 12px;border-bottom:1px solid rgba(0,240,255,.2)}
-  #viewer .vtitle{color:rgba(192,252,255,.7);font-size:13px}
-  #frame{flex:1 1 auto;width:100%;border:0;background:#0f151d}
+  /* deck viewer — full-bleed, no chrome */
+  #viewer{position:fixed;inset:0;display:none;background:#0e141c;z-index:20}
+  #viewer.show{display:block}
+  #frame{width:100%;height:100%;border:0;background:#0f151d;display:block}
 </style>
 </head>
 <body>
@@ -65,13 +63,9 @@
     <div class="grid" id="grid"></div>
   </section>
 
-  <div id="viewer">
-    <div class="vbar">
-      <button class="btn" id="btn-back">← Decks</button>
-      <span class="vtitle" id="vtitle"></span>
-    </div>
-    <iframe id="frame" title="deck"></iframe>
-  </div>
+  <!-- No chrome here: the deck's own bottom-right bar (idle-hiding) carries the
+       "Decks" back button, so presenting stays fullscreen-clean. -->
+  <div id="viewer"><iframe id="frame" title="deck"></iframe></div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

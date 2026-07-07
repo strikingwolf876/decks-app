@@ -106,7 +106,6 @@ function render(paths) {
 // ---- viewer ----
 function openDeck(path) {
   currentDeckPath = path;
-  $('vtitle').textContent = path;
   const segs = path.split('/').map(encodeURIComponent).join('/');
   $('frame').src = BASE + 'fs/' + segs;
   $('viewer').classList.add('show');
@@ -120,12 +119,20 @@ function closeDeck() {
 // ---- delegated commit (editor in iframe → here) ----
 async function commitDeck(path, text) {
   const api = `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+  // Look up the current blob SHA (needed to update an existing file). Parse
+  // defensively: a non-JSON body here means the request didn't reach the API.
   let sha;
   const g = await fetch(api + '?ref=' + encodeURIComponent(cfg.branch), { headers: ghHeaders() });
-  if (g.ok) sha = (await g.json()).sha;               // absent = new file
+  const gBody = await g.text();
+  if (g.ok) {
+    let meta; try { meta = JSON.parse(gBody); } catch { throw new Error(`sha read got non-JSON (${g.status} ${g.headers.get('content-type')})`); }
+    sha = meta.sha;
+  } else if (g.status !== 404) {
+    throw new Error('sha read ' + g.status + ': ' + gBody.slice(0, 160));   // 404 = new file, fine
+  }
   const body = { message: 'edit ' + path, content: b64utf8(text), branch: cfg.branch, ...(sha ? { sha } : {}) };
   const p = await fetch(api, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
-  if (!p.ok) throw new Error('PUT ' + p.status + ' ' + (await p.text()).slice(0, 200));
+  if (!p.ok) throw new Error('commit ' + p.status + ': ' + (await p.text()).slice(0, 160));
 }
 function b64utf8(s) { return btoa(unescape(encodeURIComponent(s))); }
 
@@ -134,6 +141,7 @@ window.addEventListener('message', async (ev) => {
   if (!m || !m.__dc) return;
   const src = ev.source;
   if (m.__dc === 'hello') { src && src.postMessage({ __dc: 'can-save', ok: !!token }, '*'); return; }
+  if (m.__dc === 'close') { closeDeck(); return; }     // "Decks" button in the deck chrome
   if (m.__dc === 'save') {
     const path = currentDeckPath;
     try {
@@ -150,7 +158,7 @@ window.addEventListener('message', async (ev) => {
 $('btn-refresh').addEventListener('click', listDecks);
 $('btn-signout').addEventListener('click', signOut);
 $('btn-paste').addEventListener('click', pasteToken);
-$('btn-back').addEventListener('click', closeDeck);
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('viewer').classList.contains('show')) closeDeck(); });
 
 (async function main() {
   $('sub').textContent = `${cfg.owner}/${cfg.repo}@${cfg.branch} · git-backed · edit anywhere`;

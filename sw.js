@@ -17,7 +17,7 @@
  */
 'use strict';
 
-const CACHE = 'decks-fs-v1';
+const CACHE = 'decks-fs-v2';
 let TOKEN = null;
 let CFG = null;               // { owner, repo, branch }
 
@@ -47,9 +47,23 @@ function inject(html) {
     .replace(/<head[^>]*>/i, (m) => m + VENDOR)
     .replace(/<\/body>/i, `<script src="${FS}_editor/dc-editor.js"></script>\n</body>`);
 }
+// ?present=1 → deck runtime only (no editor), rail off. Used by the presenter
+// window's current/next preview iframes. Mirrors serve.js injectPreview.
+const PRESENT_TWEAK =
+  '<script>(function(){function s(){var d=document.querySelector("deck-stage");' +
+  'if(!d)return setTimeout(s,40);d.setAttribute("no-rail","");}s();})();</script>';
+function injectPreview(html) {
+  return html
+    .replace(/<head[^>]*>/i, (m) => m + VENDOR)
+    .replace(/<\/body>/i, PRESENT_TWEAK + '\n</body>');
+}
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', (e) => e.waitUntil((async () => {
+  const names = await caches.keys();
+  await Promise.all(names.filter((n) => n !== CACHE).map((n) => caches.delete(n)));
+  await self.clients.claim();
+})()));
 
 self.addEventListener('message', (e) => {
   const m = e.data || {};
@@ -78,30 +92,35 @@ self.addEventListener('fetch', (e) => {
 
 async function handle(req) {
   const u = new URL(req.url);
-  const rel = decodeURIComponent(u.pathname.slice(new URL(MOUNT).pathname.length));
+  const rel = decodeURIComponent(u.pathname.slice(FS.length));
   const raw = u.searchParams.has('raw');
+  const present = u.searchParams.has('present');
   const isDeck = /\.dc\.html$/i.test(rel);
+  const htmlHeaders = { 'content-type': 'text/html', 'cache-control': 'no-cache' };
 
   if (!TOKEN || !CFG) return new Response('No token — open the gallery and sign in.', { status: 401 });
 
   const cache = await caches.open(CACHE);
-  const cacheKey = new Request(MOUNT + rel);            // key ignores query (raw/cachebuster)
-  if (!raw) {
+  const cacheKey = new Request(MOUNT + rel);            // key ignores query
+
+  // Assets: cache-first. Deck HTML: never cached — edits must stay fresh, and the
+  // editor vs. present injection differ per request.
+  if (!isDeck) {
     const hit = await cache.match(cacheKey);
-    if (hit) return isDeck ? injectResponse(hit) : hit;
+    if (hit) return hit;
   }
 
   const bytes = await fetchRepoFile(rel);
   if (bytes instanceof Response) return bytes;          // error passthrough
 
+  if (isDeck) {
+    const html = new TextDecoder().decode(bytes);
+    const out = raw ? html : present ? injectPreview(html) : inject(html);
+    return new Response(out, { headers: htmlHeaders });
+  }
   const base = new Response(bytes, { headers: { 'content-type': mimeOf(rel), 'cache-control': 'no-cache' } });
-  if (!raw) cache.put(cacheKey, base.clone());
-  return isDeck && !raw ? injectResponse(base) : base;
-}
-
-async function injectResponse(resp) {
-  const html = await resp.clone().text();
-  return new Response(inject(html), { headers: { 'content-type': 'text/html', 'cache-control': 'no-cache' } });
+  cache.put(cacheKey, base.clone());
+  return base;
 }
 
 // Read a file from the private repo. Uses the raw media type (streams up to
