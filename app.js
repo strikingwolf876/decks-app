@@ -122,10 +122,15 @@ async function commitDeck(path, text) {
   // Look up the current blob SHA (needed to update an existing file). Parse
   // defensively: a non-JSON body here means the request didn't reach the API.
   let sha;
-  const g = await fetch(api + '?ref=' + encodeURIComponent(cfg.branch), { headers: ghHeaders() });
+  const gUrl = api + '?ref=' + encodeURIComponent(cfg.branch);
+  const g = await fetch(gUrl, { headers: ghHeaders() });
   const gBody = await g.text();
+  console.log('[commitDeck] GET', gUrl, '→', g.status, g.type, g.headers.get('content-type'), 'body[0:120]=', gBody.slice(0, 120));
   if (g.ok) {
-    let meta; try { meta = JSON.parse(gBody); } catch { throw new Error(`sha read got non-JSON (${g.status} ${g.headers.get('content-type')})`); }
+    let meta; try { meta = JSON.parse(gBody); } catch {
+      console.error('[commitDeck] non-JSON sha response — full body:', gBody);
+      throw new Error(`sha read got non-JSON (${g.status} ${g.type} ${g.headers.get('content-type')})`);
+    }
     sha = meta.sha;
   } else if (g.status !== 404) {
     throw new Error('sha read ' + g.status + ': ' + gBody.slice(0, 160));   // 404 = new file, fine
